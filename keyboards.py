@@ -3,23 +3,22 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
+
 def proposal_keyboard(proposal_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="✅ Принять", callback_data=f"proposal:accept:{proposal_id}"),
-                InlineKeyboardButton(text="❌ Отказать", callback_data=f"proposal:decline:{proposal_id}"),
-            ]
-        ]
+        inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Принять", callback_data=f"proposal:accept:{proposal_id}"),
+            InlineKeyboardButton(text="❌ Отказать", callback_data=f"proposal:decline:{proposal_id}"),
+        ]]
     )
+
 
 
 def child_remove_keyboard(child_name: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=f"🗑 Отказаться от {child_name}", callback_data=f"drop_child:{child_name}")]
-        ]
+        inline_keyboard=[[InlineKeyboardButton(text="🗑 Отказаться", callback_data=f"drop_child:{child_name}")]]
     )
+
 
 
 def pill_keyboard() -> InlineKeyboardMarkup:
@@ -28,16 +27,9 @@ def pill_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def store_keyboard(prefix: str, item_count: int, user_id: int) -> InlineKeyboardMarkup | None:
-    if item_count <= 0:
-        return None
+
+def store_keyboard(user_id: int, category: str, items: list) -> InlineKeyboardMarkup:
     rows = []
-    row = []
-    for i in range(1, min(item_count, 12) + 1):
-        row.append(InlineKeyboardButton(text=f"🛒 {i}", callback_data=f"storebuy:{user_id}:{prefix}:{i}"))
-        if len(row) == 4:
-            rows.append(row)
-            row = []
-    if row:
-        rows.append(row)
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    for item in items[:10]:
+        rows.append([InlineKeyboardButton(text=f"🛍 Купить #{item['id']}", callback_data=f"storebuy:{user_id}:{category}:{item['id']}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows) if rows else InlineKeyboardMarkup(inline_keyboard=[])

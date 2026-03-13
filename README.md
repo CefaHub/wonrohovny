@@ -1,34 +1,30 @@
-# K-pop Telegram Bot (aiogram 3.x)
+# K-pop Telegram Bot
 
-Групповой Telegram-бот для флудилок с профилями, отношениями, беременностью, экономикой, банками, магазинами и работой.
+Большой групповой бот на `aiogram 3.x` для K-pop флудилки.
 
-## Структура
+## Что есть
+- профили, пол, роли
+- отношения, однополые браки, однополая/обычная беременность
+- экономика ВРК + ВХ
+- магазины, аптека, ВХ-магазин
+- банки
+- работа, бонус, активность
+- карточки айдолов с фото
+- обычная и элитная гача
+- группы и альбомы
+- RPG-приключения (500 событий)
+- текстовые команды и inline-кнопки
 
-- `main.py` — точка входа
-- `config.py` — конфиг и пути
-- `database.py` — SQLite и инициализация таблиц
-- `models.py` — датаклассы
-- `services.py` — фоновые процессы беременности/секса
-- `utils.py` — парсинг и помощники
-- `keyboards.py` — inline-клавиатуры
-- `handlers/commands.py` — текстовые команды
-- `handlers/callbacks.py` — callback-обработчики
-- `requirements.txt` — зависимости
-
-## Локальный запуск
-
+## Быстрый старт
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-# заполнить BOT_TOKEN
 python main.py
 ```
 
 ## Важно
-
-- База данных создаётся автоматически.
-- По умолчанию путь к БД — `data/bot.db` локально и `/app/data/bot.db` на Bothost.
-- Все таймеры сделаны через `asyncio.create_task()` + `asyncio.sleep()`.
-- После перезапуска процесса активные таймеры в текущем MVP не восстанавливаются автоматически из БД. Для продакшена стоит добавить recovery scheduler на startup.
+- Для групп отключи privacy mode через BotFather.
+- SQLite хранится по пути из `DB_PATH` / `DATA_DIR`.
+- Команды работают без `/`.
