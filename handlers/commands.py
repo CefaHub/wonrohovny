@@ -8,7 +8,7 @@ from aiogram import Bot, F, Router
 from aiogram.types import Message
 
 from database import Database
-from keyboards import child_remove_keyboard, proposal_keyboard
+from keyboards import child_remove_keyboard, proposal_keyboard, store_keyboard
 from services import ProcessManager
 from utils import (
     PROFESSIONS,
@@ -161,8 +161,7 @@ async def cmd_role(message: Message, bot: Bot, db: Database) -> None:
     if not target:
         await message.reply("<b>💡 Формат:</b> <code>роль @user текст</code> или ответом.")
         return
-    parts = stripped.split(maxsplit=2)
-    role_text = parts[2].strip() if len(parts) >= 3 else ""
+    role_text = stripped.replace("роль", "", 1).strip()
     if not role_text:
         await message.reply("<b>💡 Укажи текст роли после пользователя.</b>")
         return
@@ -243,13 +242,12 @@ async def cmd_sex(message: Message, bot: Bot, db: Database) -> None:
     if pair:
         await message.reply("<b>⏳ Такой процесс уже активен.</b>")
         return
-    end_time = (datetime.now() + timedelta(seconds=bot.config.sex_duration_seconds)).isoformat()
-    db.create_process(message.chat.id, message.from_user.id, "sex", end_time, target["id"], None)
-    db.create_process(message.chat.id, target["id"], "sex", end_time, message.from_user.id, None)
-    user1 = {"id": message.from_user.id, "username": message.from_user.username, "gender": db.get_user(message.from_user.id)["gender"]}
-    user2 = {"id": target["id"], "username": target.get("username"), "gender": db.get_user(target["id"])["gender"]}
-    bot.process_manager.schedule_sex(message.chat.id, user1, user2)
-    await message.reply(f"<b>🔞 {display_name(message.from_user)} и {display_name(target)} начали...</b>\nНапиши <code>отмена</code> в течение минуты, чтобы остановить процесс.")
+    proposal_id = db.create_proposal(message.chat.id, message.from_user.id, target["id"], "sex")
+    await message.reply(
+        f"<b>🔞 {display_name(message.from_user)} хочет начать процесс с {display_name(target)}.</b>\n"
+        f"<i>Кнопки видны всем, но нажать по-настоящему может только адресат.</i>",
+        reply_markup=proposal_keyboard(proposal_id),
+    )
 
 
 async def cmd_cancel_process(message: Message, bot: Bot, db: Database) -> None:
@@ -425,28 +423,29 @@ async def _show_items(message: Message, db: Database, category: str, title: str)
         await message.reply(f"<b>{title}</b>\nПока пусто 😿")
         return
     lines = [f"{i + 1}. <b>{escape(row['name'])}</b> — {row['price']} ВРК" for i, row in enumerate(items)]
-    await message.reply(f"<b>{title}</b>\n" + "\n".join(lines))
+    await message.reply(
+        f"<b>{title}</b>\n" + "\n".join(lines) + "\n\n<i>Можно купить кнопкой ниже или командой вида: магазин купить 1 / аптека купить 1</i>",
+        reply_markup=store_keyboard(category, len(items), message.from_user.id),
+    )
 
 
 async def cmd_show_shop(message: Message, bot: Bot, db: Database) -> None:
+    _, args = parse_command(message.text)
+    if args and args[0].lower() == "купить":
+        await _buy_by_context(message, db, "shop", args[1:])
+        return
     await _show_items(message, db, "shop", "🛍 Магазин")
 
 
 async def cmd_show_pharmacy(message: Message, bot: Bot, db: Database) -> None:
+    _, args = parse_command(message.text)
+    if args and args[0].lower() == "купить":
+        await _buy_by_context(message, db, "pharmacy", args[1:])
+        return
     await _show_items(message, db, "pharmacy", "💊 Аптека")
 
 
-async def cmd_buy(message: Message, bot: Bot, db: Database) -> None:
-    _, args = parse_command(message.text)
-    name = " ".join(args).strip()
-    if not name:
-        await message.reply("<b>💡 Формат:</b> <code>купить Название</code>")
-        return
-    item = db.get_shop_item_by_name(name)
-    if not item:
-        await message.reply("<b>😿 Такой товар не найден.</b>")
-        return
-    ok = db.transfer_balance(message.from_user.id, 0, 0)
+async def _buy_item(message: Message, db: Database, item) -> None:
     user = db.get_user(message.from_user.id)
     if not user or user["balance"] < item["price"]:
         await message.reply("<b>😿 Недостаточно ВРК.</b>")
@@ -454,6 +453,44 @@ async def cmd_buy(message: Message, bot: Bot, db: Database) -> None:
     db.add_balance(message.from_user.id, -item["price"])
     db.add_inventory_item(message.from_user.id, item["name"], 1)
     await message.reply(f"<b>🛒 Куплено:</b> {escape(item['name'])} за {item['price']} ВРК")
+
+
+async def _buy_by_context(message: Message, db: Database, category: str, args: list[str]) -> None:
+    if not args:
+        await message.reply("<b>💡 Пример:</b> <code>магазин купить 1</code>")
+        return
+    value = " ".join(args).strip()
+    items = db.get_shop_items(category)
+    item = None
+    if value.isdigit():
+        idx = int(value)
+        if 1 <= idx <= len(items):
+            item = items[idx - 1]
+    if item is None:
+        for row in items:
+            if row['name'].lower() == value.lower():
+                item = row
+                break
+    if item is None:
+        await message.reply("<b>😿 Такой товар не найден в этом разделе.</b>")
+        return
+    await _buy_item(message, db, item)
+
+
+async def cmd_buy(message: Message, bot: Bot, db: Database) -> None:
+    _, args = parse_command(message.text)
+    value = " ".join(args).strip()
+    if not value:
+        await message.reply("<b>💡 Формат:</b> <code>купить Название</code> или <code>магазин купить 1</code>")
+        return
+    if value.isdigit():
+        await message.reply("<b>💡 Для покупки по номеру используй:</b> <code>магазин купить 1</code> или <code>аптека купить 1</code>")
+        return
+    item = db.get_shop_item_by_name(value)
+    if not item:
+        await message.reply("<b>😿 Такой товар не найден.</b>")
+        return
+    await _buy_item(message, db, item)
 
 
 async def cmd_gift(message: Message, bot: Bot, db: Database) -> None:
